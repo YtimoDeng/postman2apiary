@@ -19,6 +19,7 @@ class PostmanToApiary:
         self.output_file = data.get('output_file')
         self.file_format = 'FORMAT: 1A'
         self.requests = []
+        self.items = []
         self.get_data()
 
     def get_data(self):
@@ -32,6 +33,7 @@ class PostmanToApiary:
         self.name = self.data.get('name', '')
         self.description = self.data.get('description', '')
         self.get_url_info()
+        self.get_items()
 
     def write(self):
         # write document introduction
@@ -43,14 +45,15 @@ class PostmanToApiary:
             doc.write(self.description)
         doc.close()
 
-        for request in self.data.get('requests'):
-            self.process_requests(request)
+        for item in self.items:
+            self.process_items(item)
 
-    def process_requests(self, request):
-        url = urlparse(request.get('url'))
-        path = url.path.replace(self.api_version, '')
-        self.domain, description = url, request.get('description')
-        method, name = request.get('method', ''), request.get('name', '')
+    def process_items(self, item):
+        # url = urlparse(request.get('url'))
+        # path = url.path.replace(self.api_version, '')
+        request, description, name = item.get('request'), item.get('description', ''), item.get('name', '')
+        path = '/'.join(request.get('url', {}).get('path', []))
+        method = request.get('method', '')
         content_type = 'application/json'
         collection_name = '## ' + name + ' [' + path + ']\n'
         title = '### ' + name + ' [' + method + ']'
@@ -64,7 +67,7 @@ class PostmanToApiary:
         try:
             if method == "POST":
                 doc.write(req + '\n\n')
-                json_data = json.loads(request.get('rawModeData'))
+                json_data = json.loads(request.get('body').get('raw'))
                 json.dump(json_data, doc, indent=8, sort_keys=True, ensure_ascii=False)
                 doc.write('\n\n\n')
         except Exception as e:
@@ -74,9 +77,16 @@ class PostmanToApiary:
         doc.close()
 
     def get_url_info(self):
-        url = self.data.get('requests')[0].get('url')
-        domain = urlparse(url)
-        self.domain = url.replace(domain.path, '') + self.api_version
+        # url = self.data.get('requests')[0].get('url')
+        # domain = urlparse(url)
+        # self.domain = url.replace(domain.path, '') + self.api_version
+        self.domain = 'http://localhost'
+
+    def get_items(self):
+        collectionFolders = self.data.get('item')
+        for collectionFolder in collectionFolders:
+            self.items = collectionFolder.get('item')
+
 
 
 if __name__ == "__main__":
