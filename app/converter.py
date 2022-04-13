@@ -18,11 +18,16 @@ class PostmanToApiary:
         self.api_version = '/api/v1'
         self.output_file = data.get('output_file')
         self.file_format = 'FORMAT: 1A'
-        self.requests = []
-        self.items = []
-        self.get_data()
+        self.folderNum = 1
+        self.resources = {}
+        self.folders = []
+        self.collection_variable = {}
+        self.load_collection_json_data()
+        self.get_collection_variable()
+        self.get_document_info()
+        self.get_folders()
 
-    def get_data(self):
+    def load_collection_json_data(self):
         try:
             with open(self.file, encoding='utf-8') as f:
                 self.data = json.loads(f.read())
@@ -30,10 +35,19 @@ class PostmanToApiary:
             print('[x] :( Some error occurred')
             print(e)
             exit(0)
-        self.name = self.data.get('name', '')
+
+    def get_collection_variable(self):
+        variables = self.data.get('variable', [])
+        for variable in variables:
+            self.collection_variable[variable.get('key')] = variable.get('value')
+
+    def get_document_info(self):
+        self.name = self.data.get('info', {}).get('name')
         self.description = self.data.get('description', '')
-        self.get_url_info()
-        self.get_items()
+        self.domain = self.collection_variable.get('domain', 'http://localhost')
+
+    def get_folders(self):
+        self.folders = self.data.get('item')
 
     def write(self):
         # write document introduction
@@ -45,51 +59,85 @@ class PostmanToApiary:
             doc.write(self.description)
         doc.close()
 
-        for item in self.items:
-            self.process_items(item)
+        for folder in self.folders:
+            self.process_folder(folder)
 
-    def process_items(self, item):
-        # url = urlparse(request.get('url'))
-        # path = url.path.replace(self.api_version, '')
-        request, description, name = item.get('request'), item.get('description', ''), item.get('name', '')
-        path = '/'.join(request.get('url', {}).get('path', []))
-        method = request.get('method', '')
-        content_type = 'application/json'
-        collection_name = '## ' + name + ' [' + path + ']\n'
-        title = '### ' + name + ' [' + method + ']'
-        req = '+ Request (' + content_type + ')'
-        resp = '+ Response 201 (' + content_type + ')'
+    def process_folder(self, folder):
+        folderName = folder.get('name', '')
+        items = folder.get('item', [])
+
+        for item in items:
+            self.process_item(item)
 
         doc = open(self.output_file, 'a')
-        doc.write(collection_name + '\n\n')
-        doc.write(title + '\n')
-        doc.write(description + '\n\n')
-        try:
-            if method == "POST":
-                doc.write(req + '\n\n')
-                json_data = json.loads(request.get('body').get('raw'))
-                json.dump(json_data, doc, indent=8, sort_keys=True, ensure_ascii=False)
-                doc.write('\n\n\n')
-        except Exception as e:
-            pass
+        doc.write('# Group ' + str(self.folderNum) + '.' + folderName + '\n\n')
+        self.folderNum += 1
+        content_type = 'application/json'
+        for resourceKey in self.resources:
+            resource = self.resources[resourceKey]
+            resourceName = '## ' + resource['name'] + ' [/' + resource['path'] + ']\n'
+            doc.write(resourceName + '\n\n')
+            for method in resource['methods']:
+                apiTitle = '### ' + method['method'] + ' '+ resource['path'] + ' [' + method['method'] + ']'
+                doc.write(apiTitle + '\n\n')
+                if (method['description']): 
+                    doc.write(method['description'] + '\n\n')
+                try:
+                    if method['method'] == "POST" or method['method'] == "PUT":
+                        doc.write('+ Request (' + content_type + ')\n\n')
+                        doc.write('    + Body\n\n')
+                        doc.write('            {')
+                        doc.write(json.dumps(method['requestBody'], indent = 14)[1:-1])
+                        doc.write('            }\n')
+                        doc.write('\n\n\n')
+                except Exception as e:
+                    pass
+                doc.write('+ Response 200 (' + content_type + ')\n\n\n')
 
-        doc.write(resp + '\n\n\n')
         doc.close()
 
-    def get_url_info(self):
-        # url = self.data.get('requests')[0].get('url')
-        # domain = urlparse(url)
-        # self.domain = url.replace(domain.path, '') + self.api_version
-        self.domain = 'http://localhost'
+    def process_item(self, item):
+        request, response = item.get('request'), item.get('response')
+        name, description = item.get('name', ''), item.get('description', '')
+        url = request.get('url')
+        
+        if isinstance(url, object):
+            path = '/'.join(url.get('path', []))
+        else:
+            raise ValueError('Can not find path.')
+        
+        method = request.get('method', '')
+        if method == "POST" or method == "PUT":
+            json_data = json.loads(request.get('body').get('raw'))
+        else:
+            json_data = ''
 
-    def get_items(self):
-        collectionFolders = self.data.get('item')
-        for collectionFolder in collectionFolders:
-            self.items = collectionFolder.get('item')
+        methodAttr = {
+            'method': method,
+            'description': description,
+            'requestBody': json_data,
+            'responseBody': '',
+        }
 
+        if path in self.resources:
+            self.resources[path]['methods'].append(methodAttr)
+        else:
+            self.resources[path] = {
+                "path" : path,
+                "name" : name,
+                "methods" : [
+                    methodAttr
+                ],
+            };
+        
+        
 
 
 if __name__ == "__main__":
-    app = PostmanToApiary('data.json')
+    data = dict()
+    data['postman_collection'] = '/home/wishmobile/Tools/testPostman2Apiary.json'
+    data['output_file'] = '/home/wishmobile/Tools/test.apib'
+    app = PostmanToApiary(data)
+    app.write()
     # app.main()
 

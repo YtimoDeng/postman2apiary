@@ -22,7 +22,7 @@ def main():
 
     data = dict()
     data['postman_collection'] = sys.argv[1] if sys.argv[1] else 'postman_collection.json'
-    data['output_file'] = sys.argv[2] if sys.argv[2] else 'apiary' + str(randint(0, 9)) + '.apid'
+    data['output_file'] = sys.argv[2] if sys.argv[2] else 'apiary' + str(randint(0, 9)) + '.apib'
 
     print(' * Generating api markup')
     app = PostmanToApiary(data)
